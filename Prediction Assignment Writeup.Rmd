@@ -1,0 +1,119 @@
+---
+title: "Prediction Assignment Writeup"
+author: "Heidi Peterson"
+date: "3/12/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants.
+
+The goal of your project is to predict the manner in which they did the exercise. This is the "classe" variable in the training set. You may use any of the other variables to predict with. You should create a report describing how you built your model, how you used cross validation, what you think the expected out of sample error is, and why you made the choices you did. You will also use your prediction model to predict 20 different test cases.
+
+```{r cars}
+library(rpart)
+trainingset <- read.csv("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv", na.strings=c("NA","#DIV/0!", ""))
+testingset <- read.csv("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv", na.strings=c("NA","#DIV/0!", ""))
+```
+
+Cleaning Data and take out useless first six rows
+```{r}
+NATraining <- sapply(trainingset, function(x) {sum(is.na(x))})
+trainingset <- trainingset[,which(NATraining == 0)]
+
+NATesting <- sapply(testingset, function(x) {sum(is.na(x))})
+testingset <- testingset[, which(NATesting == 0)]
+
+trainingset <- trainingset[,-c(1:6)]
+testingset <- testingset[, -c(1:6)]
+trainingset<-data.frame(trainingset)
+testingset<-data.frame(testingset)
+
+```
+training testing model
+Cross-validation
+Cross-validation will be performed by subsampling our training data set randomly without replacement into 2 subsamples: subTraining data (75% of the original Training data set) and Testing data (25%). Our models will be fitted on the subTraining data set, and tested on the Testing data. Once the most accurate model is choosen, it will be tested on the original Testing data set.
+```{r}
+library(caret)
+set.seed(123)
+inTrain <- createDataPartition(trainingset$classe, p = 0.7, list = FALSE)
+training <- trainingset[inTrain,]
+testing <- trainingset[-inTrain,]
+
+```
+## Decision Tree Model 
+Six young health participants were asked to perform one set of 10 repetitions of the Unilateral Dumbbell Biceps Curl in five different fashions: exactly according to the specification (Class A), throwing the elbows to the front (Class B), lifting the dumbbell only halfway (Class C), lowering the dumbbell only halfway (Class D) and throwing the hips to the front (Class E).
+
+Class A corresponds to the specified execution of the exercise, while the other 4 classes correspond to common mistakes.
+
+
+```{r pressure, echo=FALSE}
+# Look at the data
+library(rpart.plot)
+
+
+# Create the model
+model <- rpart(formula = classe ~ ., 
+                      data = training, 
+                      method = "class")
+rpart.plot(x = model, yesno = 2, type = 0, extra = 0)
+
+```
+Evaluating classification model performance
+we will evaluate the performance of the model using test set classification error. A confusion matrix is a convenient way to examine the per-class error rates for all classes at once.
+# Generate predicted classes using the model object
+# Calculate the confusion matrix for the test set
+```{r}
+class_prediction <- predict( model, testing, type = "class")
+
+confusionMatrix(class_prediction, testing$classe)  
+
+```
+
+
+## RANDOM FOREST MODEL
+Grab OOB error matrix 
+```{r}
+library(randomForest)
+model2 <- randomForest(classe ~. , data=training, method="class")
+
+# Grab OOB error matrix & take a look
+err <- model2$err.rate
+head(err)
+
+# Look at final OOB error rate (last row in err matrix)
+oob_err <- err[nrow(err), "OOB"]
+print(oob_err)
+```
+plot Random Forest Model
+```{r}
+plot(model2)
+# Add a legend since it doesn't have one by default
+legend(x = "right", 
+       legend = colnames(err),
+       fill = 1:ncol(err))
+```
+prediction and confusion matrix for random forest model
+```{r}
+prediction2 <- predict(model2, testing, type = "class")
+cm <-confusionMatrix(prediction2, testing$classe)
+print(cm)
+# Compare test set accuracy to OOB accuracy
+paste0("Test Accuracy: ", cm$overall[1])
+paste0("OOB Accuracy: ", 1 - oob_err)
+
+```
+
+Let us take a look to which model is better
+it says the random forest is 99% accurate compaired to decission tree which is 83% accurate so we will use model 2 random forest on our test set.  
+
+```{r}
+for (i in 1:20) {
+  p <- predict(model2, testingset[i,])
+  print(p)
+}
+```
+
